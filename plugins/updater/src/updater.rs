@@ -1559,6 +1559,56 @@ fn escape_msi_property_arg(arg: impl AsRef<OsStr>) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    #[cfg(all(windows, feature = "zip"))]
+    fn zip_update_extracts_installer_with_patched_archive_reader() {
+        use super::*;
+        use std::io::Write;
+
+        let update = Update {
+            run_on_main_thread: Arc::new(Box::new(|_| Ok(()))),
+            config: serde_json::from_value(serde_json::json!({ "pubkey": "test" })).unwrap(),
+            on_before_exit: None,
+            body: None,
+            current_version: "1.0.0".into(),
+            version: "1.0.1".into(),
+            date: None,
+            target: "windows-x86_64".into(),
+            download_url: Url::parse("https://example.invalid/update.zip").unwrap(),
+            signature: String::new(),
+            raw_json: serde_json::Value::Null,
+            timeout: None,
+            proxy: None,
+            no_proxy: true,
+            headers: HeaderMap::new(),
+            extract_path: PathBuf::new(),
+            app_name: "zip-compatibility-test".into(),
+            installer_args: Vec::new(),
+            current_exe_args: Vec::new(),
+            configure_client: None,
+        };
+        let mut archive = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        archive
+            .start_file(
+                "setup.exe",
+                zip::write::SimpleFileOptions::default()
+                    .compression_method(zip::CompressionMethod::Stored),
+            )
+            .unwrap();
+        archive
+            .write_all(b"installer fixture; never executed")
+            .unwrap();
+        let bytes = archive.finish().unwrap().into_inner();
+        let installer = update.extract(&bytes).unwrap();
+        let WindowsUpdaterType::Nsis { path, .. } = installer else {
+            panic!("expected the ZIP's NSIS installer");
+        };
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            b"installer fixture; never executed"
+        );
+        std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+    }
 
     #[test]
     #[cfg(windows)]
