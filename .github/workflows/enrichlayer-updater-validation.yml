@@ -1,0 +1,21 @@
+name: Enrich Layer updater compatibility
+on:
+  push:
+    branches: [codex/DEV-13167-updater-zip9]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  updater:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p tauri-plugin-updater --lib
+      - run: cargo tree -p tauri-plugin-updater
